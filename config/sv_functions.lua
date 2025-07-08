@@ -1,5 +1,5 @@
----@class Functions
----@field notify fun(source: number, reason: string)
+---@class sv_functions
+---@field kickPlayer fun(source: number, reason: string)
 local sv_functions = {};
 
 sv_functions.kickPlayer = function (source, reason)

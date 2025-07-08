@@ -3,57 +3,76 @@ local config = require 'config.config';
 local functions = require 'config.cl_functions';
 
 local point = nil;
+local countdownTimer = nil;
+local preAfkTimer = nil;
 
 ---@return boolean
 local function isInZone()
-    return point.currentDistance < config.afkZone;
+    return point and point:contains(GetEntityCoords(cache.ped)) or false;
 end;
 
-local function createNewPoint()
-    if point then point:remove() end;
+function onEnter()
+    local totalSeconds = config.afkMinutes * 60;
+    local countdownTime = math.floor(totalSeconds * (config.countdownPercent / 100));
+    local preTimer = math.floor(totalSeconds * (config.preAfkPercent / 100));
 
-    point = lib.points.new({
-        coords = GetEntityCoords(cache.ped),
-        distance = config.afkZone or 3.0
-    });
-
-    function point:onEnter()
-        local totalSeconds = config.afkMinutes * 60;
-        local countdownTime = math.floor(totalSeconds * (config.countdownPercent / 100));
-
-        CreateThread(function()
-            local preTimer = math.floor(totalSeconds * (config.preAfkPercent / 100));
-            while preTimer > 0 and isInZone() do
-                Wait(1000);
-                preTimer = preTimer - 1;
-            end;
-
-            if isInZone() then
-                local timer = countdownTime;
-                while timer > 0 and isInZone() do
-                    functions.setCounter(timer);
-                    Wait(1000);
-                    timer = timer - 1;
-                end;
-
-                if timer <= 0 and isInZone() then
+    preAfkTimer = lib.timer(preTimer * 1000, function()
+        if isInZone() then
+            countdownTimer = lib.timer(countdownTime * 1000, function()
+                if isInZone() then
                     functions.setCounter(0);
-
                     TriggerServerEvent('next-afk:kickPlayer');
                 end;
-            end;
-        end);
+            end, true);
+
+            CreateThread(function()
+                while countdownTimer and countdownTimer:getTimeLeft('s') > 0 and isInZone() do
+                    local timeLeft = math.floor(countdownTimer:getTimeLeft('s'));
+                    functions.setCounter(timeLeft);
+                    Wait(1000);
+                end;
+            end);
+        end;
+    end, true);
+end;
+
+function onExit()
+    if preAfkTimer then
+        preAfkTimer:forceEnd(false);
+        preAfkTimer = nil;
     end;
 
-    function point:onExit()
-        functions.hideCounter();
-
-        createNewPoint();
+    if countdownTimer then
+        countdownTimer:forceEnd(false);
+        countdownTimer = nil;
     end;
+
+    functions.hideCounter();
+
+    Wait(200);
+    createNewPoint();
+end;
+
+function createNewPoint()
+    if point then point:remove() end;
+
+    point = lib.zones.sphere({
+        coords = GetEntityCoords(cache.ped),
+        radius = config.afkZone or 0.1,
+        onEnter = onEnter,
+        onExit = onExit,
+        debug = true
+    });
+end;
+
+local function createCommand()
+    RegisterCommand(config.afkCommand, onExit)
 end
 
 CreateThread(function()
-    while not NetworkIsPlayerActive(cache.playerId) do Wait(100) end;
-
+    while not NetworkIsPlayerActive(cache.playerId) do Wait(500) end;
     createNewPoint();
+
+    if not config.afkCommand then return end;
+    createCommand()
 end);

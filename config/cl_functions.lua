@@ -1,5 +1,6 @@
----@class Functions
----@field notify fun(message: string, type: string, duration: number | 5000)
+---@class cl_functions
+---@field setCounter fun(seconds: number)
+---@field hideCounter function
 local cl_functions = {};
 
 cl_functions.setCounter = function (seconds)
