@@ -61,7 +61,6 @@ function createNewPoint()
         radius = config.afkZone or 0.1,
         onEnter = onEnter,
         onExit = onExit,
-        debug = true
     });
 end;
 
